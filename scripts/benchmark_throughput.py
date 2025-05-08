@@ -232,7 +232,7 @@ def run_vllm(
     enable_chunked_prefill: bool,
     max_num_batched_tokens: int,
     distributed_executor_backend: Optional[str],
-    gpu_memory_utilization: float = 0.9,
+    gpu_memory_utilization: float = 0.7,
     num_scheduler_steps: int = 1,
     download_dir: Optional[str] = None,
     load_format: str = EngineArgs.load_format,
@@ -326,7 +326,7 @@ async def run_vllm_async(
     enable_chunked_prefill: bool,
     max_num_batched_tokens: int,
     distributed_executor_backend: Optional[str],
-    gpu_memory_utilization: float = 0.9,
+    gpu_memory_utilization: float = 0.7,
     num_scheduler_steps: int = 1,
     download_dir: Optional[str] = None,
     load_format: str = EngineArgs.load_format,
@@ -518,7 +518,7 @@ def main(args: argparse.Namespace):
     else:
         raise ValueError(f"Unknown backend: {args.backend}")
     total_num_tokens = sum(prompt_len + output_len for _, prompt_len, output_len in requests)
-    print(f"Throughput: {len(requests) / elapsed_time:.2f} requests/s, " f"{total_num_tokens / elapsed_time:.2f} tokens/s")
+    print(f"Throughput: {len(requests) / elapsed_time:.2f} requests/s, {total_num_tokens / elapsed_time:.2f} tokens/s")
 
     # Output JSON results if specified
     if args.output_json:
@@ -538,7 +538,7 @@ if __name__ == "__main__":
     parser.add_argument("--backend", type=str, choices=["vllm", "hf", "mii"], default="vllm")
     parser.add_argument("--dataset", type=str, default=None, help="Path to the dataset.")
     parser.add_argument("--input-len", type=int, default=None, help="Input prompt length for each request")
-    parser.add_argument("--output-len", type=int, default=None, help="Output length for each request. Overrides the " "output length from the dataset.")
+    parser.add_argument("--output-len", type=int, default=None, help="Output length for each request. Overrides the output length from the dataset.")
     parser.add_argument("--model", type=str, default="facebook/opt-125m")
     parser.add_argument("--tokenizer", type=str, default=None)
     parser.add_argument("--quantization", "-q", choices=[*QUANTIZATION_METHODS, None], default=None)
@@ -552,7 +552,7 @@ if __name__ == "__main__":
         "--max-model-len",
         type=int,
         default=None,
-        help="Maximum length of a sequence (including prompt and output). " "If None, will be derived from the model.",
+        help="Maximum length of a sequence (including prompt and output). If None, will be derived from the model.",
     )
     parser.add_argument(
         "--dtype",
@@ -567,10 +567,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--gpu-memory-utilization",
         type=float,
-        default=0.9,
-        help="the fraction of GPU memory to be used for "
-        "the model executor, which can range from 0 to 1."
-        "If unspecified, will use the default value of 0.9.",
+        default=0.5,
+        help="the fraction of GPU memory to be used for the model executor, which can range from 0 to 1.If unspecified, will use the default value of 0.9.",
     )
     parser.add_argument("--enforce-eager", action="store_true", help="enforce eager execution")
     parser.add_argument(
@@ -597,9 +595,9 @@ if __name__ == "__main__":
     parser.add_argument("--num-scheduler-steps", type=int, default=1, help="Maximum number of forward steps per scheduler call.")
     parser.add_argument("--enable-prefix-caching", action="store_true", help="Enable automatic prefix caching for vLLM backend.")
     parser.add_argument("--enable-chunked-prefill", action="store_true", help="enable chunked prefill for vLLM backend.")
-    parser.add_argument("--max-num-batched-tokens", type=int, default=None, help="maximum number of batched tokens per " "iteration")
+    parser.add_argument("--max-num-batched-tokens", type=int, default=None, help="maximum number of batched tokens per iteration")
     parser.add_argument(
-        "--download-dir", type=str, default=None, help="directory to download and load the weights, " "default to the default cache dir of huggingface"
+        "--download-dir", type=str, default=None, help="directory to download and load the weights, default to the default cache dir of huggingface"
     )
     parser.add_argument("--output-json", type=str, default=None, help="Path to save the throughput results in JSON format.")
     parser.add_argument(
@@ -661,5 +659,5 @@ if __name__ == "__main__":
         if args.hf_max_batch_size is not None:
             raise ValueError("HF max batch size is only for HF backend.")
         if args.tokenizer != args.model:
-            raise ValueError("Tokenizer must be the same as the model for MII " "backend.")
+            raise ValueError("Tokenizer must be the same as the model for MII backend.")
     main(args)
