@@ -500,7 +500,7 @@ async def worker(args, work_queue: WorkQueue, semaphore, worker_id):
 async def sglang_server_task(model_name_or_path, args, semaphore):
     # Check GPU memory, lower mem devices need a bit less KV cache space because the VLM takes additional memory
     gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)  # Convert to GB
-    mem_fraction_arg = ["--mem-fraction-static", "0.80"] if gpu_memory < 60 else []
+    mem_fraction_arg = ["--mem-fraction-static", "0.50"] if gpu_memory < 100 else []
 
     cmd = [
         "python3",
@@ -893,11 +893,11 @@ def print_stats(args, root_work_queue):
     print(f"Total pages processed: {pages_total:,}")
 
     print(f"\nTotal output tokens: {output_tokens_total:,}")
-    print(f"Projected output tokens: {round((output_tokens_total/max(1, completed_items))*total_items):,}")
+    print(f"Projected output tokens: {round((output_tokens_total / max(1, completed_items)) * total_items):,}")
 
-    print(f"\nAverage pages per doc: {pages_total/max(1,docs_total):,.1f}")
-    print(f"Average output tokens per doc: {output_tokens_total/max(1,docs_total):,.1f}")
-    print(f"Average output tokens per page: {output_tokens_total/max(1,pages_total):,.1f}")
+    print(f"\nAverage pages per doc: {pages_total / max(1, docs_total):,.1f}")
+    print(f"Average output tokens per doc: {output_tokens_total / max(1, docs_total):,.1f}")
+    print(f"Average output tokens per page: {output_tokens_total / max(1, pages_total):,.1f}")
 
     # Print long context documents stats
     print(f"\nLong Context Documents (>{LONG_CONTEXT_THRESHOLD} tokens): {long_context_docs_count:,}")
@@ -997,6 +997,26 @@ async def main():
         logger.info("Got --pdfs argument, going to add to the work queue")
         pdf_work_paths = set()
 
+        # Read JSONL file and extract source paths to exclude
+        exclude_paths = set()
+        jsonl_file_path = "/ltstorage/home/strich/olmocr/localworkspace/results/output_tatdqa_train.jsonl"
+
+        if os.path.exists(jsonl_file_path):
+            logger.info(f"Reading excluded paths from {jsonl_file_path}")
+            with open(jsonl_file_path, "r") as jsonl_file:
+                for line in jsonl_file:
+                    logger.info(f"Got doc {line}")
+                    try:
+                        doc = json.loads(line)
+                        if "metadata" in doc and "Source-File" in doc["metadata"]:
+                            exclude_paths.add(doc["metadata"]["Source-File"])
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"Failed to parse line in {jsonl_file_path}: {e}")
+
+        # Remove excluded paths from args.pdfs
+        args.pdfs = [pdf for pdf in args.pdfs if pdf not in exclude_paths]
+        logger.info(f"Excluded {len(exclude_paths)} paths from processing")
+
         for pdf_path in args.pdfs:
             # Expand s3 paths
             if pdf_path.startswith("s3://"):
@@ -1010,7 +1030,7 @@ async def main():
                     or pdf_path.lower().endswith(".jpeg")
                 ):
                     if open(pdf_path, "rb").read(4) == b"%PDF":
-                        logger.info(f"Loading file at {pdf_path} as PDF document")
+                        # logger.info(f"Loading file at {pdf_path} as PDF document")
                         pdf_work_paths.add(pdf_path)
                     elif is_png(pdf_path) or is_jpeg(pdf_path):
                         logger.info(f"Loading file at {pdf_path} as image document")
